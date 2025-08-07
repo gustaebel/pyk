@@ -41,6 +41,7 @@ import tarfile
 import importlib
 import subprocess
 import urllib.error
+import importlib.util
 import urllib.request
 
 from datetime import datetime
