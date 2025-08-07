@@ -19,12 +19,18 @@ from pyk import Package, Crypto, NoSuchPackage, TOML_NAME, JSON_NAME, HOST, PORT
 
 def build(argv):
     parser = argparse.ArgumentParser(prog="pyk --build")
+    parser.description = "Build a package from the definition in a TOML file."
     parser.add_argument("path", nargs="?", default=TOML_NAME,
                         help=f"the PATH of the build file, default is `{TOML_NAME}`")
     args = parser.parse_args(argv)
 
-    # Read pyk.toml file.
-    with open(args.path, "rb") as fobj:
+    # Change to the base directory of the toml file.
+    dirname, basename = os.path.split(args.path)
+    if dirname:
+        os.chdir(dirname)
+
+    # Read the pyk.toml file.
+    with open(basename, "rb") as fobj:
         config = tomllib.load(fobj)
 
     # FIXME do a lot more sanity checks.
@@ -94,6 +100,7 @@ def build(argv):
 
 def install(argv):
     parser = argparse.ArgumentParser(prog="pyk --install")
+    parser.description = "Install a loader for a package to a directory in PATH."
     parser.add_argument("name")
     parser.add_argument("directory", nargs="?", default="/usr/local/bin",
                         help="the directory in which to install the package, "\
@@ -126,6 +133,7 @@ def install(argv):
 
 def execute(argv):
     parser = argparse.ArgumentParser()
+    parser.description = "Execute a runner package with arguments."
     parser.add_argument("-d", "--debug", action="store_true", default=False,
                         help="show debug messages")
     parser.add_argument("name",
