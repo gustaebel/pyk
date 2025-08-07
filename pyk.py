@@ -130,19 +130,32 @@ class Package:
     def sync(self):
         # FIXME detect python version changes.
         self.log(f"check if package {self.name!r} has changed")
-        version, last_modified = self.get_remote_info()
-
-        uptodate = True
         try:
-            with open(self.json_path, encoding="utf-8") as fobj:
-                install_date = json.load(fobj)["install_date"]
-        except FileNotFoundError:
-            uptodate = False
+            version, last_modified = self.get_remote_info()
+        except urllib.error.URLError as exc:
+            if isinstance(exc.reason, ConnectionRefusedError):
+                if os.path.exists(self.json_path):
+                    print(f"WARNING: unable to reach {HOST}:{PORT}", file=sys.stderr)
+                    print(f"WARNING: falling back on cached package", file=sys.stderr)
+                    self.load_config()
+                    return False
+                else:
+                    print(f"ERROR: unable to reach {HOST}:{PORT}", file=sys.stderr)
+                    sys.exit(123)
+            else:
+                raise
         else:
+            uptodate = True
             try:
-                uptodate = datetime.datetime.fromisoformat(install_date).timestamp() > last_modified
-            except KeyError:
+                with open(self.json_path, encoding="utf-8") as fobj:
+                    install_date = json.load(fobj)["install_date"]
+            except FileNotFoundError:
                 uptodate = False
+            else:
+                try:
+                    uptodate = datetime.datetime.fromisoformat(install_date).timestamp() > last_modified
+                except KeyError:
+                    uptodate = False
 
         if uptodate:
             self.log("package is up-to-date")
