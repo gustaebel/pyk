@@ -196,7 +196,7 @@ def serve(argv):
             # pylint:disable=protected-access
             await web._run_app(self.app, host=self.args.host, port=self.args.port, print=None)
 
-        async def list(self, request):
+        async def list(self, _):
             info = {}
             for type, name, version, date in self.conn.execute(
                     "select type, name, version, date from pkg"):
