@@ -145,10 +145,10 @@ def serve(argv):
     parser = argparse.ArgumentParser(prog="pyk --serve")
     parser.add_argument("-v", "--verbose", action="store_true", default=False,
                         help="show verbose server messages")
-    parser.add_argument("-H", "--host", default="0.0.0.0",
-                        help="listen on this host/ip, default is all")
-    parser.add_argument("-p", "--port", default=7777,
-                        help="listen on this port, default is 7777")
+    parser.add_argument("-H", "--host", default=HOST,
+                        help=f"listen on this host/ip, default is {HOST!r}")
+    parser.add_argument("-p", "--port", default=PORT,
+                        help=f"listen on this port, default is {PORT}")
     parser.add_argument("db", metavar="PATH",
                         help="the PATH to the database file where the packages are stored")
     args = parser.parse_args(argv)
