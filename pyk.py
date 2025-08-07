@@ -6,12 +6,12 @@ import base64
 import shutil
 import hashlib
 import tarfile
-import datetime
 import importlib
 import subprocess
 import urllib.error
 import urllib.request
 
+from datetime import datetime
 from contextlib import contextmanager
 
 from cryptography.fernet import Fernet
@@ -109,7 +109,7 @@ class Package:
 
     def get_remote_info(self):
         config = self.prepare_download("info")
-        return config["version"], datetime.datetime.fromisoformat(config["date"]).timestamp()
+        return config["version"], datetime.fromisoformat(config["date"]).timestamp()
 
     @classmethod
     @contextmanager
@@ -153,7 +153,7 @@ class Package:
                 uptodate = False
             else:
                 try:
-                    uptodate = datetime.datetime.fromisoformat(install_date).timestamp() > last_modified
+                    uptodate = datetime.fromisoformat(install_date).timestamp() > last_modified
                 except KeyError:
                     uptodate = False
 
@@ -189,12 +189,12 @@ class Package:
         with open(self.json_path, encoding="utf-8") as fobj:
             self.config = json.load(fobj)
 
-        dt = datetime.datetime.fromisoformat(self.config["build_date"])
+        dt = datetime.fromisoformat(self.config["build_date"])
         self.log(f"build date: {dt:%Y-%m-%d %H:%M:%S}")
         self.log(f"version: {self.config['version']}")
 
     def save_config(self):
-        self.config["install_date"] = datetime.datetime.now().isoformat()
+        self.config["install_date"] = datetime.now().isoformat()
         with open(self.json_path, "w", encoding="utf-8") as fobj:
             json.dump(self.config, fobj, indent=4)
 
