@@ -7,10 +7,11 @@ pyk.pkgname import foo`.
 
 ## Features
 
+- Easy deployment of custom Python scripts and libraries with a single command.
 - Simple repository server with zero setup.
 - Package building is straight-forward, no `setup.py` or `pyproject.toml`. Just
   say which files you want to put in the package. 
-- Only one third-party dependency for the client side:
+- Only one third-party dependency needed on the client side:
   [cryptography](https://pypi.org/project/cryptography/)
 
 ## Usage
