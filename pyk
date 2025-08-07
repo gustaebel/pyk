@@ -11,7 +11,8 @@ import sqlite3
 import tarfile
 import tomllib
 import argparse
-import datetime
+
+from datetime import datetime
 
 from pyk import Package, Crypto, NoSuchPackage, TOML_NAME, JSON_NAME, HOST, PORT
 
@@ -43,7 +44,7 @@ def build(argv):
     version += 1
 
     config["version"] = version
-    config["build_date"] = datetime.datetime.now().isoformat()
+    config["build_date"] = datetime.now().isoformat()
     config["build_host"] = socket.gethostname()
     config["build_path"] = os.path.abspath(args.path)
 
@@ -174,6 +175,7 @@ def serve(argv):
 
             self.app = web.Application()
             self.app.add_routes([
+                web.get("/list", self.list),
                 web.post("/upload/{type}/{name}", self.upload),
                 web.get("/info/{type}/{name}", self.info),
                 web.get("/download/{type}/{name}", self.download),
@@ -188,11 +190,18 @@ def serve(argv):
 
         def log(self, message):
             if self.args.verbose:
-                print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"), message, sep="   ")
+                print(datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"), message, sep="   ")
 
         async def run(self):
             # pylint:disable=protected-access
             await web._run_app(self.app, host=self.args.host, port=self.args.port, print=None)
+
+        async def list(self, request):
+            info = {}
+            for type, name, version, date in self.conn.execute(
+                    "select type, name, version, date from pkg"):
+                info.setdefault(type, []).append({"name": name, "version": version, "date": date})
+            return web.json_response(info)
 
         async def upload(self, request):
             type = request.match_info["type"]
@@ -203,7 +212,7 @@ def serve(argv):
 
             config = Package.extract_config(data)
 
-            now = datetime.datetime.now()
+            now = datetime.now()
             self.conn.execute("insert or replace into pkg values (?, ?, ?, ?, ?)",
                               (type, name, config["version"], now.isoformat(), data))
             self.conn.commit()
@@ -238,6 +247,31 @@ def serve(argv):
     asyncio.run(Server(args).run())
 
 
+def list_():
+    def print_package(pkg):
+        print(f"    {pkg['name']}  v{pkg['version']}  ({datetime.fromisoformat(pkg['date']):%Y-%m-%d %H:%M:%S})")
+
+    print(f"repo: http://{HOST}:{PORT}")
+    print()
+    with urllib.request.urlopen(f"http://{HOST}:{PORT}/list") as uobj:
+        info = json.load(uobj)
+
+        libs = info.get("lib")
+        runs = info.get("run")
+
+        if libs is not None:
+            print("libraries:")
+            for lib in libs:
+                print_package(lib)
+
+        if runs is not None:
+            if libs is not None:
+                print()
+            print("runners:")
+            for run in runs:
+                print_package(lib)
+
+
 try:
     command = sys.argv[1]
 except IndexError:
@@ -252,5 +286,7 @@ match command:
         install(sys.argv[2:])
     case "--serve":
         serve(sys.argv[2:])
+    case "--list":
+        list_()
     case _:
         execute(sys.argv[1:])
