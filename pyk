@@ -119,9 +119,12 @@ def install(argv):
 
 def execute(argv):
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--debug", action="store_true", default=False)
-    parser.add_argument("name")
-    parser.add_argument("args", nargs=argparse.REMAINDER)
+    parser.add_argument("-d", "--debug", action="store_true", default=False,
+                        help="show debug messages")
+    parser.add_argument("name",
+                        help="the name of the package to run")
+    parser.add_argument("args", nargs=argparse.REMAINDER,
+                        help="arguments passed to the package runner")
     args = parser.parse_args(argv)
 
     package = Package(args.name, lib=False, debug=args.debug)
