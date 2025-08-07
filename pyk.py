@@ -49,12 +49,14 @@ class Crypto:
 
 
 class Logfile:
+    """Log file class that buffers messages until a file is connected.
+    """
 
     def __init__(self, debug=False):
         self.buffer = io.StringIO()
         self.debug = debug
 
-    def set_file(self, path):
+    def connect_file(self, path):
         # pylint:disable=consider-using-with
         self.fobj = open(path, "w", encoding="utf-8")
         self.fobj.write(self.buffer.getvalue())
@@ -90,7 +92,7 @@ class Package:
     def log(self, message):
         self.logfile.log(message)
 
-    def prepare_download(self, command):
+    def server_command(self, command):
         self.log(f"get {self.url % command}")
         try:
             request = urllib.request.Request(self.url % command)
@@ -107,9 +109,8 @@ class Package:
 
         return data
 
-    def get_remote_info(self):
-        config = self.prepare_download("info")
-        return config["version"], datetime.fromisoformat(config["date"]).timestamp()
+    def get_remote_version(self):
+        return self.server_command("info")["version"]
 
     @classmethod
     @contextmanager
@@ -128,10 +129,14 @@ class Package:
                 raise ValueError("not a valid package file")
 
     def sync(self):
+        """Check if the remote package was updated. If yes, remove the outdated package from the
+           cache and download the current version. If the server is unreachable, use the cached
+           package if there is one but warn.
+        """
         # FIXME detect python version changes.
         self.log(f"check if package {self.name!r} has changed")
         try:
-            version, last_modified = self.get_remote_info()
+            remote_version = self.get_remote_version()
         except urllib.error.URLError as exc:
             if isinstance(exc.reason, ConnectionRefusedError):
                 if os.path.exists(self.json_path):
@@ -148,21 +153,17 @@ class Package:
             uptodate = True
             try:
                 with open(self.json_path, encoding="utf-8") as fobj:
-                    install_date = json.load(fobj)["install_date"]
+                    local_version = json.load(fobj)["version"]
             except FileNotFoundError:
                 uptodate = False
             else:
-                try:
-                    uptodate = datetime.fromisoformat(install_date).timestamp() > last_modified
-                except KeyError:
-                    uptodate = False
+                self.log(f"local version: {local_version} / remote version: {remote_version}")
+                uptodate = local_version == remote_version
 
         if uptodate:
             self.log("package is up-to-date")
             self.load_config()
             return False
-
-        self.log(f"package {self.name!r} was updated to version {version}")
 
         try:
             shutil.rmtree(self.venv_dir)
@@ -171,10 +172,10 @@ class Package:
 
         os.makedirs(self.venv_dir)
 
-        self.logfile.set_file(os.path.join(self.venv_dir, "pyk.log"))
+        self.logfile.connect_file(os.path.join(self.venv_dir, "pyk.log"))
 
         self.log(f"download package {self.name!r}")
-        data = self.prepare_download("download")
+        data = self.server_command("download")
         self.log(f"extract package {self.name!r} to {self.venv_dir!r}")
         with self.open_archive(data) as tar:
             tar.extractall(self.venv_dir)
@@ -182,7 +183,6 @@ class Package:
         self.load_config()
         self.prepare_dependencies()
         self.save_config()
-
         return True
 
     def load_config(self):

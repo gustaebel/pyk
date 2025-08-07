@@ -35,7 +35,7 @@ def build(argv):
 
     package = Package(name, lib=type == "lib")
     try:
-        version, _ = package.get_remote_info()
+        version = package.get_remote_version()
     except NoSuchPackage:
         version = 0
     else:
