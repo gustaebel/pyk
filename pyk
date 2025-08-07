@@ -1,0 +1,253 @@
+#!/usr/bin/env python3
+
+import io
+import os
+import sys
+import json
+import socket
+import urllib
+import asyncio
+import sqlite3
+import tarfile
+import tomllib
+import argparse
+import datetime
+
+from pyk import Package, Crypto, NoSuchPackage, TOML_NAME, JSON_NAME, HOST, PORT
+
+
+def build(argv):
+    parser = argparse.ArgumentParser(prog="pyk --build")
+    parser.add_argument("path", nargs="?", default=TOML_NAME,
+                        help=f"the PATH of the build file, default is `{TOML_NAME}`")
+    args = parser.parse_args(argv)
+
+    with open(args.path, "rb") as fobj:
+        toml_data = fobj.read()
+
+    config = tomllib.loads(toml_data.decode("utf-8"))
+
+    # FIXME do a lot more sanity checks.
+    name = config["name"]
+
+    type = "lib" if config.get("lib") is not None else "run"
+
+    package = Package(name, lib=type == "lib")
+    try:
+        version, _ = package.get_remote_info()
+    except NoSuchPackage:
+        version = 0
+    else:
+        print(f"found existing version {version}")
+
+    version += 1
+
+    config["version"] = version
+    config["build_date"] = datetime.datetime.now().isoformat()
+    config["build_host"] = socket.gethostname()
+    config["build_path"] = os.path.abspath(args.path)
+
+    print(f"building {type!r} project {name!r} version {version}")
+
+    fobj = io.BytesIO()
+    with tarfile.open(fileobj=fobj, mode="w:gz") as tar:
+        data = json.dumps(config, indent=4) + "\n"
+        t = tar.gettarinfo(args.path)
+        t.name = JSON_NAME
+        t.size = len(data)
+        tar.addfile(t, io.BytesIO(data.encode("utf-8")))
+
+        if config.get("lib") is not None:
+            tar.add(config["lib"])
+        else:
+            # FIXME check if the shebang is right.
+            with open(config["run"], encoding="utf-8") as f:
+                shebang = f.readline().rstrip()
+                assert shebang.endswith("python3")
+            tar.add(config["run"])
+
+        for path in config.get("libraries", []):
+            # FIXME Exclude __pycache__ etc.
+            tar.add(path)
+
+        for path in config.get("extras", []):
+            tar.add(path)
+
+    fobj.seek(0)
+
+    crypto = Crypto()
+    data = crypto.encrypt(fobj.read())
+
+    req = urllib.request.Request(f"http://{HOST}:{PORT}/upload/{type}/{name}", data=data,
+                                 headers={"Content-Type": "application/octet-stream",
+                                          "Content-Length": len(data)})
+    with urllib.request.urlopen(req) as uobj:
+        uobj.read()
+
+
+def install(argv):
+    parser = argparse.ArgumentParser(prog="pyk --install")
+    parser.add_argument("name")
+    parser.add_argument("directory", nargs="?", default="/usr/local/bin",
+                        help="the directory in which to install the package, "\
+                             "default is /usr/local/bin")
+    args = parser.parse_args(argv)
+
+    path = os.path.join(args.directory, args.name)
+    print(f"install {args.name} package to {path!r}")
+    try:
+        with open(path, encoding="utf-8") as fobj:
+            fobj.readline()
+            exists = True
+            overwrite = fobj.readline().rstrip() == f"# pyk: {args.name}"
+    except FileNotFoundError:
+        exists = False
+
+    if exists:
+        if overwrite:
+            print(f"INFO: replacing {path!r}")
+        else:
+            raise SystemExit(f"ERROR: refusing to overwrite {path!r}")
+
+    with open(path, "w", encoding="utf-8") as fobj:
+        print("#!/bin/sh", file=fobj)
+        print(f"# pyk: {args.name}", file=fobj)
+        print(f'exec pyk {args.name} "$@"', file=fobj)
+
+    os.chmod(path, 0o755)
+
+
+def execute(argv):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--debug", action="store_true", default=False)
+    parser.add_argument("name")
+    parser.add_argument("args", nargs=argparse.REMAINDER)
+    args = parser.parse_args(argv)
+
+    package = Package(args.name, lib=False, debug=args.debug)
+    try:
+        package.sync()
+    except NoSuchPackage:
+        print(f"ERROR: package {args.name!r} not found", file=sys.stderr)
+        sys.exit(123)
+
+    package.run(args.args)
+
+
+def serve(argv):
+    # pylint:disable=import-outside-toplevel
+    try:
+        from aiohttp import web
+    except ImportError:
+        # pylint:disable=raise-missing-from
+        raise SystemExit("ERROR: the aiohttp module is missing!")
+
+    parser = argparse.ArgumentParser(prog="pyk --serve")
+    parser.add_argument("-v", "--verbose", action="store_true", default=False,
+                        help="show verbose server messages")
+    parser.add_argument("-H", "--host", default="0.0.0.0",
+                        help="listen on this host/ip, default is all")
+    parser.add_argument("-p", "--port", default=7777,
+                        help="listen on this port, default is 7777")
+    parser.add_argument("db", metavar="PATH",
+                        help="the PATH to the database file where the packages are stored")
+    args = parser.parse_args(argv)
+
+    class Server:
+
+        SCHEMA = """\
+            create table pkg (
+                type text not null,
+                name text not null,
+                version integer not null,
+                date text not null,
+                data blob not null,
+                primary key (type, name)
+            );
+        """
+
+        def __init__(self, args):
+            self.args = args
+
+            self.app = web.Application()
+            self.app.add_routes([
+                web.post("/upload/{type}/{name}", self.upload),
+                web.get("/info/{type}/{name}", self.info),
+                web.get("/download/{type}/{name}", self.download),
+            ])
+
+            self.crypto = Crypto()
+
+            create = not os.path.exists(self.args.db)
+            self.conn = sqlite3.connect(self.args.db)
+            if create:
+                self.conn.executescript(self.SCHEMA)
+
+        def log(self, message):
+            if self.args.verbose:
+                print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"), message, sep="   ")
+
+        async def run(self):
+            # pylint:disable=protected-access
+            await web._run_app(self.app, host=self.args.host, port=self.args.port, print=None)
+
+        async def upload(self, request):
+            type = request.match_info["type"]
+            name = request.match_info["name"]
+
+            data = await request.read()
+            data = self.crypto.decrypt(data)
+
+            config = Package.extract_config(data)
+
+            now = datetime.datetime.now()
+            self.conn.execute("insert or replace into pkg values (?, ?, ?, ?, ?)",
+                              (type, name, config["version"], now.isoformat(), data))
+            self.conn.commit()
+
+            self.log(f"successfully stored {type!r} package {name!r} version {config['version']}")
+
+            return web.json_response({"response": "yeah"})
+
+        async def info(self, request):
+            type = request.match_info["type"]
+            name = request.match_info["name"]
+
+            for version, date in self.conn.execute(
+                    "select version, date from pkg where type = ? and name = ?", (type, name)):
+                return web.json_response({"type": type, "name": name, "version": version,
+                                          "date": date})
+            else:
+                return web.HTTPNotFound()
+
+        async def download(self, request):
+            type = request.match_info["type"]
+            name = request.match_info["name"]
+
+            for version, data in self.conn.execute(
+                    "select version, data from pkg where type = ? and name = ?", (type, name)):
+                self.log(f"download of {type!r} package {name!r} version {version}")
+                data = self.crypto.encrypt(data)
+                return web.Response(body=data, content_type="application/octet-stream")
+            else:
+                return web.HTTPNotFound()
+
+    asyncio.run(Server(args).run())
+
+
+try:
+    command = sys.argv[1]
+except IndexError:
+    # pylint:disable=raise-missing-from
+    raise SystemExit("ERROR: first argument must be either --build, --install, --serve "\
+            "or the name of a pyk package")
+
+match command:
+    case "--build":
+        build(sys.argv[2:])
+    case "--install":
+        install(sys.argv[2:])
+    case "--serve":
+        serve(sys.argv[2:])
+    case _:
+        execute(sys.argv[1:])
