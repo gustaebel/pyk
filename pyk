@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # pyk - A minimal and highly experimental Python packaging system for easy
-#       deployment. Run and import packages directly from a remote server. 
+#       deployment. Run and import packages directly from a remote server.
 #
 # Copyright (c) 2025, Lars Gustäbel
 #

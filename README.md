@@ -34,7 +34,7 @@ continuing.
 - Fast turnaround times while developing and debugging scripts.
 - Independent from distribution package management.
 - Simple repository server with near-zero setup.
-- Restricted and secure access to the package repository using symmetric
+- Restricted and secure access to the package repository using basic symmetric
   [Fernet](https://cryptography.io/en/latest/fernet/) encryption.
 - Python package building is straight-forward, no `setup.py` or
   `pyproject.toml`. Just say which files you want to put in the package. 

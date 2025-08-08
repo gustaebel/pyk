@@ -1,6 +1,6 @@
 #
 # pyk - A minimal and highly experimental Python packaging system for easy
-#       deployment. Run and import packages directly from a remote server. 
+#       deployment. Run and import packages directly from a remote server.
 #
 # Copyright (c) 2025, Lars Gustäbel
 #
@@ -36,14 +36,14 @@ import sys
 import json
 import base64
 import shutil
+import urllib.error
+import urllib.request
 import hashlib
 import tarfile
 import platform
 import importlib
-import subprocess
-import urllib.error
 import importlib.util
-import urllib.request
+import subprocess
 
 from datetime import datetime
 from contextlib import contextmanager
@@ -55,7 +55,7 @@ from cryptography.fernet import Fernet
 __path__ = os.path.dirname(__file__)
 
 
-KEY = b"This is the secret key."
+KEYFILE = "/etc/pyk.key"
 HOST = "localhost"
 PORT = 7777
 
@@ -75,7 +75,12 @@ BASEDIR = os.path.expanduser("~/.cache/pyk")
 class Crypto:
 
     def __init__(self):
-        hashed_key = hashlib.sha256(KEY).digest()
+        try:
+            with open(KEYFILE, "rb") as fobj:
+                hashed_key = hashlib.sha256(fobj.read()).digest()
+        except FileNotFoundError:
+            print(f"ERROR: missing keyfile {KEYFILE!r}", file=sys.stderr)
+            sys.exit(123)
         self.fernet = Fernet(base64.b64encode(hashed_key))
 
     def encrypt(self, data):
@@ -139,8 +144,6 @@ class Package:
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
                 raise NoSuchPackage() from exc
-
-        return data
 
     def get_remote_version(self):
         return self.server_command("info")["version"]
