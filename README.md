@@ -1,56 +1,63 @@
 # pyk
 
-**pyk** is a minimal and highly experimental Python package runner and
-importer. It fetches pre-built packages from a remote repository and runs or
-imports them on demand - no installs, no setup. Just `pyk pkgname` or `from
-pyk.pkgname import foo`.
+**pyk** is a minimal and experimental system to distribute packages to clients
+in a home network. Scripts (Python, shell, etc.) or Python libraries are
+packaged and then uploaded to a server. On the client side, a simple `pyk
+<pkgname>` downloads and runs a packaged script. In Python, `from pyk import
+<pkgname>` downloads and imports a packaged library. Minimal setup is needed.
 
-## What it does
 
-I regularly write small helper scripts (Python and Bash) that I want to use on
-the various computers and VMs running Arch Linux and Debian in my home network.
-Distributing these is tedious. If you want to do it right, the best solution
-for this is to create distribution packages for these scripts. In many cases,
-however, it is necessary to create packages for both distributions I use, and
-then I have to log in to all the hosts where I want to use them and install
-them there. This has to be repeated for every update while ironing out the
-bugs.
+## How it works
 
-**pyk** tries to make all this as easy as possible. It consists of a small
-repository server and a loader which is the one thing that has to be installed
-on the hosts exactly once. Creating a package is easy, the most basic config
-for this is just two lines of TOML. This package is uploaded to the repository
-with a simple command. On the hosts, the loader is used to execute these
-packages. Before doing this, the loader checks if there is a new version
-available in the repository, and if yes, downloads it and sets it up before
-continuing.
+I regularly write scripts (Python and Bash) and Python libraries that I want to
+use on various computers and VMs in my home network.
+
+I was looking for an easier way to deploy these projects instead of copying
+them to other hosts by hand or packaging and installing them using the distro's
+package manager. Both these approaches are quite laborious, especially during
+the initial development and testing phase that makes frequent updates
+necessary.
+
+**pyk** makes all this as easy as possible. It provides of a small repository
+server and a runner that will be installed on each client. The runner is
+responsible for downloading, installing and running packages from the
+repository. It checks for a new package version and updates the local
+installation if necessary before every run.
+
+This way, deploying and updating a package is as easy as uploading it to the
+repository. All the clients will use the new version the next time the package
+is run.
+
 
 ## Features
 
-- Fast and easy pull-based deployment of small software projects, e.g. custom
-  scripts (Python, shell, etc.) and Python libraries.
-- Simplifies development when the machine where the project is developed is
-  different from the machine where it is tested / used.
-- Fast turnaround times while developing and debugging scripts.
+- Fast and easy auto-updating deployment of small software projects, e.g.
+  custom scripts (Python, shell, etc.) and Python libraries.
+- Faster turnaround times while developing and debugging scripts.
+- Simplifies simultaneous development on multiple different machines.
 - Independent from distribution package management.
-- Simple repository server with near-zero setup.
 - Restricted and secure access to the package repository using basic symmetric
   [Fernet](https://cryptography.io/en/latest/fernet/) encryption.
 - Python package building is straight-forward, no `setup.py` or
-  `pyproject.toml`. Just say which files you want to put in the package. 
+  `pyproject.toml`.
 - Only one single third-party dependency needed on the client side:
   [cryptography](https://pypi.org/project/cryptography/)
 
-## Usage
+
+## Installation
+
+You should build a package for your distro that contains the two
+files `pyk` and `pyk.py`.
 
 Before getting started, you must create the same configuration file
-`etc/pyk/config.toml` on every host:
+`etc/pyk/config.toml`.
 
 ```toml
 KEY = "Secret keyphrase"        # change this!
-HOST = "host.domain.tld"
+HOST = "host.domain.tld"        # this too
 PORT = 7777
 ```
+
 
 ### Example script `foo.py`
 
@@ -66,7 +73,7 @@ if __name__ == "__main__":
     bar(int(sys.argv[1]))
 ```
 
-### Create and use a runner package
+### Creating and using a runner package
 
 1. Create a `pyk.toml` file:
    ```toml
@@ -77,13 +84,13 @@ if __name__ == "__main__":
    ```sh
    $ pyk --build
    ```
-3. You can now run `foo.py` on every host that can connect to the repository:
+3. You can now run `foo.py` on every client that can connect to the repository:
    ```sh
    $ pyk foo 8
    64
    ```
 
-### Create and use a library package
+### Creating and using a library package
 
 1. Create a `pyk.toml` file:
    ```toml
@@ -95,7 +102,7 @@ if __name__ == "__main__":
    ```sh
    $ pyk --build
    ```
-3. You can now run `foo.py` on every host that can connect to the repository:
+3. You can now run `foo.py` on every client that can connect to the repository:
    ```sh
    $ python
    Python 3.13.5 (main, Jun 21 2025, 09:35:00) [GCC 15.1.1 20250425] on linux

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyk"
+version = "0.1"
+authors = [{name = "Lars Gustäbel", email = "lars@gustaebel.de"}]
+description = "A minimal and experimental Python packaging system for easy deployment."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "BSD-3-Clause"
+classifiers = ["Programming Language :: Python :: 3"]
+dependencies = ["cryptography"]
+
+[project.urls]
+Repository = "https://github.com/gustaebel/pyk"
+
+[project.scripts]
+pyk = "pyk"
+
+[tool.setuptools]
+py-modules = ["pyk.py"]
