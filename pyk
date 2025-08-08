@@ -105,6 +105,7 @@ def build(argv):
             with open(config["run"], encoding="utf-8") as f:
                 line = f.readline().rstrip()
                 assert line.startswith("#!"), f"{config['run']} must start with a shebang line"
+                assert os.access(f.name, os.X_OK), f"{config['run']} must be executable"
             tar.add(config["run"])
 
         # Add optional libraries.
