@@ -43,7 +43,14 @@ continuing.
 
 ## Usage
 
-**IMPORTANT:** Change the `KEY` in `pyk.py` before deploying.
+Before getting started, you must create the same configuration file
+`etc/pyk/config.toml` on every host:
+
+```toml
+KEY = "Secret keyphrase"        # change this!
+HOST = "host.domain.tld"
+PORT = 7777
+```
 
 ### Example script `foo.py`
 

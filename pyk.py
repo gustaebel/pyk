@@ -55,7 +55,7 @@ from cryptography.fernet import Fernet
 # Otherwise, `from pyk import foo` would not look for the `foo` module below `pyk`.
 __path__ = os.path.dirname(__file__)
 
-CONFIG_PATH = "/etc/pyk/config"
+CONFIG_PATH = "/etc/pyk/config.toml"
 
 try:
     with open(CONFIG_PATH, "rb") as fobj:
