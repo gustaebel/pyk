@@ -51,9 +51,6 @@ from contextlib import contextmanager
 
 from cryptography.fernet import Fernet
 
-# NOTE: This is a dummy to persuade Python's import mechanics into treating this as a package.
-# Otherwise, `from pyk import foo` would not look for the `foo` module below `pyk`.
-__path__ = os.path.dirname(__file__)
 
 CONFIG_PATH = "/etc/pyk/config.toml"
 
@@ -272,7 +269,9 @@ class ImportHook:
 
     def find_spec(self, fullname, path, target=None):
         # pylint:disable=unused-argument
-        if not fullname.startswith(PACKAGE_NAME + "."):
+        if fullname == f"{PACKAGE_NAME}.__main__":
+            return None
+        elif not fullname.startswith(PACKAGE_NAME + "."):
             return None
 
         name = fullname.split(".", 1)[1]

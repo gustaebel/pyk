@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 #
 # pyk - A minimal and highly experimental Python packaging system for easy
 #       deployment. Run and import packages directly from a remote server.
@@ -45,7 +44,7 @@ import argparse
 
 from datetime import datetime
 
-from pyk import Package, Crypto, NoSuchPackage, TOML_NAME, JSON_NAME, HOST, PORT
+from . import Package, Crypto, NoSuchPackage, TOML_NAME, JSON_NAME, HOST, PORT
 
 
 def build(argv):

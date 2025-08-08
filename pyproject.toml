@@ -20,4 +20,4 @@ Repository = "https://github.com/gustaebel/pyk"
 pyk = "pyk"
 
 [tool.setuptools]
-py-modules = ["pyk.py"]
+packages = ["pyk"]
