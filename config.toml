@@ -1,0 +1,3 @@
+KEY = "Secret keyphrase"        # change this!
+HOST = "host.domain.tld"        # this too
+PORT = 7777
