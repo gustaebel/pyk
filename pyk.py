@@ -54,12 +54,22 @@ from cryptography.fernet import Fernet
 # Otherwise, `from pyk import foo` would not look for the `foo` module below `pyk`.
 __path__ = os.path.dirname(__file__)
 
+CONFIG_PATH = "/etc/pyk/config"
 
-KEYFILE = "/etc/pyk.key"
-HOST = "localhost"
-PORT = 7777
-
-NODE = platform.node()
+try:
+    with open(CONFIG_PATH, "rb") as fobj:
+        config = tomllib.load(fobj)
+except FileNotFoundError:
+    print(f"ERROR: missing config {CONFIG_PATH!r}", file=sys.stderr)
+    sys.exit(123)
+else:
+    try:
+        KEY = config["KEY"]
+        HOST = config["HOST"]
+        PORT = config["PORT"]
+    except KeyError as exc:
+        print(f"ERROR: missing key {exc} in config {CONFIG_PATH!r}", file=sys.stderr)
+        sys.exit(123)
 
 
 class NoSuchPackage(Exception):
@@ -69,18 +79,14 @@ class NoSuchPackage(Exception):
 PACKAGE_NAME = "pyk"
 TOML_NAME = "pyk.toml"
 JSON_NAME = "pyk.json"
-BASEDIR = os.path.expanduser("~/.cache/pyk")
+CACHE_DIR = os.path.expanduser("~/.cache/pyk")
+NODE = platform.node()
 
 
 class Crypto:
 
     def __init__(self):
-        try:
-            with open(KEYFILE, "rb") as fobj:
-                hashed_key = hashlib.sha256(fobj.read()).digest()
-        except FileNotFoundError:
-            print(f"ERROR: missing keyfile {KEYFILE!r}", file=sys.stderr)
-            sys.exit(123)
+        hashed_key = hashlib.sha256(KEY).digest()
         self.fernet = Fernet(base64.b64encode(hashed_key))
 
     def encrypt(self, data):
@@ -126,7 +132,7 @@ class Package:
         self.logfile = Logfile(debug)
 
         self.url = f"http://{HOST}:{PORT}/%s/{'lib' if self.lib else 'run'}/{self.name}"
-        self.venv_dir = os.path.join(BASEDIR, "lib" if self.lib else "run", self.name)
+        self.venv_dir = os.path.join(CACHE_DIR, "lib" if self.lib else "run", self.name)
         self.json_path = os.path.join(self.venv_dir, JSON_NAME)
 
         self.crypto = Crypto()
