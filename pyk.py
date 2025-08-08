@@ -38,6 +38,7 @@ import base64
 import shutil
 import hashlib
 import tarfile
+import platform
 import importlib
 import subprocess
 import urllib.error
@@ -57,6 +58,8 @@ __path__ = os.path.dirname(__file__)
 KEY = b"This is the secret key."
 HOST = "localhost"
 PORT = 7777
+
+NODE = platform.node()
 
 
 class NoSuchPackage(Exception):
@@ -129,13 +132,9 @@ class Package:
     def server_command(self, command):
         self.log(f"get {self.url % command}")
         try:
-            request = urllib.request.Request(self.url % command)
+            request = urllib.request.Request(self.url % command, headers={"Pyk-Node": NODE})
             with urllib.request.urlopen(request) as response:
-                data = response.read()
-                if command == "download":
-                    data = self.crypto.decrypt(data)
-                elif command == "info":
-                    data = json.loads(data)
+                return json.load(response)
 
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
@@ -210,6 +209,8 @@ class Package:
 
         self.log(f"download package {self.name!r}")
         data = self.server_command("download")
+        data = self.crypto.decrypt(data["data"])
+
         self.log(f"extract package {self.name!r} to {self.venv_dir!r}")
         with self.open_archive(data) as tar:
             tar.extractall(self.venv_dir)

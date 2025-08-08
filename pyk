@@ -121,12 +121,13 @@ def build(argv):
     # Prepare the package data for upload to the repository.
     crypto = Crypto()
     data = crypto.encrypt(fobj.read())
+    data = json.dumps({"data": data.decode("ascii")}).encode("ascii")
 
-    req = urllib.request.Request(f"http://{HOST}:{PORT}/upload/{type}/{name}", data=data,
-                                 headers={"Content-Type": "application/octet-stream",
-                                          "Content-Length": len(data)})
-    with urllib.request.urlopen(req) as uobj:
-        uobj.read()
+    request = urllib.request.Request(
+            f"http://{HOST}:{PORT}/upload/{type}/{name}", data=data,
+            headers={"Content-Type": "application/json", "Content-Length": len(data)})
+    with urllib.request.urlopen(request) as uobj:
+        json.load(uobj)
 
 
 def install(argv):
@@ -213,6 +214,13 @@ def serve(argv):
                 data blob not null,
                 primary key (type, name)
             );
+            create table access (
+                type text not null,
+                name text not null,
+                date text not null,
+                node text not null
+            );
+            create index access_type_name_idx on access(type, name);
         """
 
         def __init__(self, args):
@@ -252,26 +260,30 @@ def serve(argv):
             type = request.match_info["type"]
             name = request.match_info["name"]
 
-            data = await request.read()
-            data = self.crypto.decrypt(data)
+            data = json.loads(await request.read())
+            data = self.crypto.decrypt(data["data"])
 
             config = Package.extract_config(data)
-
-            now = datetime.now()
+            version = config["version"]
+            date = datetime.now().isoformat()
             self.conn.execute("insert or replace into pkg values (?, ?, ?, ?, ?)",
-                              (type, name, config["version"], now.isoformat(), data))
+                              (type, name, version, date, data))
             self.conn.commit()
 
             self.log(f"successfully stored {type!r} package {name!r} version {config['version']}")
-
-            return web.json_response({"response": "yeah"})
+            return web.json_response({"type": type, "name": name, "version": version, "date": date})
 
         async def info(self, request):
             type = request.match_info["type"]
             name = request.match_info["name"]
 
+            if (node := request.headers.get("Pyk-Node")) is None:
+                return web.HTTPBadRequest()
+
             for version, date in self.conn.execute(
                     "select version, date from pkg where type = ? and name = ?", (type, name)):
+                self.conn.execute("insert into access values (?, ?, ?, ?)",
+                                  (type, name, datetime.now().isoformat(), node))
                 return web.json_response({"type": type, "name": name, "version": version,
                                           "date": date})
             else:
@@ -281,11 +293,15 @@ def serve(argv):
             type = request.match_info["type"]
             name = request.match_info["name"]
 
+            if (node := request.headers.get("Pyk-Node")) is None:
+                return web.HTTPBadRequest()
+
             for version, data in self.conn.execute(
                     "select version, data from pkg where type = ? and name = ?", (type, name)):
-                self.log(f"download of {type!r} package {name!r} version {version}")
+                self.log(f"node {node!r} downloading {'library' if type == 'lib' else 'runner'} "\
+                        f"package {name} v{version}")
                 data = self.crypto.encrypt(data)
-                return web.Response(body=data, content_type="application/octet-stream")
+                return web.json_response({"data": data.decode("ascii")})
             else:
                 return web.HTTPNotFound()
 
