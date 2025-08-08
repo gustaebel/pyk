@@ -40,6 +40,7 @@ import urllib.error
 import urllib.request
 import hashlib
 import tarfile
+import tomllib
 import platform
 import importlib
 import importlib.util
@@ -64,7 +65,7 @@ except FileNotFoundError:
     sys.exit(123)
 else:
     try:
-        KEY = config["KEY"]
+        KEY = config["KEY"].encode("utf-8")
         HOST = config["HOST"]
         PORT = config["PORT"]
     except KeyError as exc:
