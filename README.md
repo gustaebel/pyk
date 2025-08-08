@@ -2,16 +2,43 @@
 
 **pyk** is a minimal and highly experimental Python package runner and
 importer. It fetches pre-built packages from a remote repository and runs or
-imports them on demand — no installs, no setup. Just `pyk pkgname` or `from
+imports them on demand - no installs, no setup. Just `pyk pkgname` or `from
 pyk.pkgname import foo`.
+
+## What it does
+
+I regularly write small helper scripts (Python and Bash) that I want to use on
+the various computers and VMs running Arch Linux and Debian in my home network.
+Distributing these is tedious. If you want to do it right, the best solution
+for this is to create distribution packages for these scripts. In many cases,
+however, it is necessary to create packages for both distributions I use, and
+then I have to log in to all the hosts where I want to use them and install
+them there. This has to be repeated for every update while ironing out the
+bugs.
+
+**pyk** tries to make all this as easy as possible. It consists of a small
+repository server and a loader which is the one thing that has to be installed
+on the hosts exactly once. Creating a package is easy, the most basic config
+for this is just two lines of TOML. This package is uploaded to the repository
+with a simple command. On the hosts, the loader is used to execute these
+packages. Before doing this, the loader checks if there is a new version
+available in the repository, and if yes, downloads it and sets it up before
+continuing.
 
 ## Features
 
-- Easy deployment of custom Python scripts and libraries with a single command.
-- Simple repository server with zero setup.
-- Package building is straight-forward, no `setup.py` or `pyproject.toml`. Just
-  say which files you want to put in the package. 
-- Only one third-party dependency needed on the client side:
+- Fast and easy pull-based deployment of small software projects, e.g. custom
+  scripts (Python, shell, etc.) and Python libraries.
+- Simplifies development when the machine where the project is developed is
+  different from the machine where it is tested / used.
+- Fast turnaround times while developing and debugging scripts.
+- Independent from distribution package management.
+- Simple repository server with near-zero setup.
+- Restricted and secure access to the package repository using symmetric
+  [Fernet](https://cryptography.io/en/latest/fernet/) encryption.
+- Python package building is straight-forward, no `setup.py` or
+  `pyproject.toml`. Just say which files you want to put in the package. 
+- Only one single third-party dependency needed on the client side:
   [cryptography](https://pypi.org/project/cryptography/)
 
 ## Usage
