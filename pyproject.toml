@@ -9,7 +9,7 @@ authors = [{name = "Lars Gustäbel", email = "lars@gustaebel.de"}]
 description = "A minimal and experimental Python packaging system for easy deployment."
 readme = "README.md"
 requires-python = ">=3.11"
-license = "BSD-3-Clause"
+license = {text = "BSD-3-Clause"}
 classifiers = ["Programming Language :: Python :: 3"]
 dependencies = ["cryptography"]
 
