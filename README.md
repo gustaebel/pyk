@@ -4,7 +4,7 @@
 in a home network. Scripts (Python, shell, etc.) or Python libraries are
 packaged and then uploaded to a server. On the client side, a simple `pyk
 <pkgname>` downloads and runs a packaged script. In Python, `from pyk import
-<pkgname>` downloads and imports a packaged library. Minimal setup is needed.
+<pkgname>` downloads and imports a packaged library. Minimal setup is needed. 
 
 
 ## How it works
@@ -21,8 +21,8 @@ necessary.
 **pyk** makes all this as easy as possible. It provides of a small repository
 server and a runner that will be installed on each client. The runner is
 responsible for downloading, installing and running packages from the
-repository. It checks for a new package version and updates the local
-installation if necessary before every run.
+repository. Before every run, it checks for a new package version and updates
+the local installation if necessary.
 
 This way, deploying and updating a package is as easy as uploading it to the
 repository. All the clients will use the new version the next time the package
@@ -33,33 +33,38 @@ is run.
 
 - Fast and easy auto-updating deployment of small software projects, e.g.
   custom scripts (Python, shell, etc.) and Python libraries.
-- Faster turnaround times while developing and debugging scripts.
 - Simplifies simultaneous development on multiple different machines.
 - Independent from distribution package management.
+- Straight-forward building of packages, no `setup.py` or `pyproject.toml`.
 - Restricted and secure access to the package repository using basic symmetric
   [Fernet](https://cryptography.io/en/latest/fernet/) encryption.
-- Python package building is straight-forward, no `setup.py` or
-  `pyproject.toml`.
 - Only one single third-party dependency needed on the client side:
   [cryptography](https://pypi.org/project/cryptography/)
 
 
 ## Installation
 
-You should build a package for your distro that contains the two
-files `pyk` and `pyk.py`.
+Edit `config.toml`. Then do this as root:
 
-Before getting started, you must create the same configuration file
-`etc/pyk/config.toml`.
+```sh
+$ python setup.py install
+$ install -Dt /etc/pyk config.toml
+```
 
-```toml
-KEY = "Secret keyphrase"        # change this!
-HOST = "host.domain.tld"        # this too
-PORT = 7777
+Start the server on the host as specified in `config.toml`:
+
+```sh
+$ pyk --server -v pyk.db
 ```
 
 
+## Usage
+
 ### Example script `foo.py`
+
+This is the file we want to distribute. It can be used both as a script or be
+imported as a module. For it to be called as a script it must contain a shebang
+line (`#!`) and be set executable.
 
 ```py
 #!/usr/bin/env python3
@@ -102,7 +107,8 @@ if __name__ == "__main__":
    ```sh
    $ pyk --build
    ```
-3. You can now run `foo.py` on every client that can connect to the repository:
+3. You can now import `foo.py` on every client that can connect to the
+   repository using the *pyk* pseudo package.
    ```sh
    $ python
    Python 3.13.5 (main, Jun 21 2025, 09:35:00) [GCC 15.1.1 20250425] on linux
