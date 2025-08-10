@@ -252,7 +252,7 @@ def serve(argv):
         async def list(self, _):
             info = {}
             for type, name, version, date in self.conn.execute(
-                    "select type, name, version, date from pkg"):
+                    "select type, name, version, date from pkg order by name"):
                 info.setdefault(type, []).append({"name": name, "version": version, "date": date})
             return web.json_response(info)
 
