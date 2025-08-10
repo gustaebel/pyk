@@ -178,17 +178,14 @@ class Package:
         try:
             remote_version = self.get_remote_version()
         except urllib.error.URLError as exc:
-            if isinstance(exc.reason, ConnectionRefusedError):
-                if os.path.exists(self.json_path):
-                    print(f"WARNING: unable to reach {HOST}:{PORT}", file=sys.stderr)
-                    print("WARNING: falling back on cached package", file=sys.stderr)
-                    self.load_config()
-                    return False
-                else:
-                    print(f"ERROR: unable to reach {HOST}:{PORT}", file=sys.stderr)
-                    sys.exit(123)
+            if os.path.exists(self.json_path):
+                print(f"WARNING: unable to reach {HOST}:{PORT}", file=sys.stderr)
+                print("WARNING: falling back on cached package", file=sys.stderr)
+                self.load_config()
+                return False
             else:
-                raise
+                print(f"ERROR: unable to reach {HOST}:{PORT}", file=sys.stderr)
+                sys.exit(123)
         else:
             uptodate = True
             try:
