@@ -232,6 +232,7 @@ def serve(argv):
                 web.post("/upload/{type}/{name}", self.upload),
                 web.get("/info/{type}/{name}", self.info),
                 web.get("/download/{type}/{name}", self.download),
+                web.get("/watch/{type}/{name}", self.watch),
             ])
 
             self.crypto = Crypto()
@@ -240,6 +241,8 @@ def serve(argv):
             self.conn = sqlite3.connect(self.args.db)
             if create:
                 self.conn.executescript(self.SCHEMA)
+
+            self.watches = {}
 
         def log(self, message):
             if self.args.verbose:
@@ -269,6 +272,10 @@ def serve(argv):
             self.conn.execute("insert or replace into pkg values (?, ?, ?, ?, ?)",
                               (type, name, version, date, data))
             self.conn.commit()
+
+            for e, (t, n) in self.watches.items():
+                if t == type and n == name:
+                    e.set()
 
             self.log(f"successfully stored {type!r} package {name!r} version {config['version']}")
             return web.json_response({"type": type, "name": name, "version": version, "date": date})
@@ -304,6 +311,22 @@ def serve(argv):
                 return web.json_response({"data": data.decode("ascii")})
             else:
                 return web.HTTPNotFound()
+
+        async def watch(self, request):
+            type = request.match_info["type"]
+            name = request.match_info["name"]
+            event = asyncio.Event()
+
+            self.watches[event] = (type, name)
+            try:
+                await asyncio.wait_for(event.wait(), timeout=60)
+            except TimeoutError:
+                updated = False
+            else:
+                updated = True
+
+            del self.watches[event]
+            return web.json_response({"updated": updated})
 
     asyncio.run(Server(args).run())
 
