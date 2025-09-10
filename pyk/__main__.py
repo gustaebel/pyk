@@ -273,9 +273,9 @@ def serve(argv):
                               (type, name, version, date, data))
             self.conn.commit()
 
-            for e, (t, n) in self.watches.items():
+            for q, (t, n) in self.watches.items():
                 if t == type and n == name:
-                    e.set()
+                    q.put_nowait((version, date))
 
             self.log(f"successfully stored {type!r} package {name!r} version {config['version']}")
             return web.json_response({"type": type, "name": name, "version": version, "date": date})
@@ -315,18 +315,21 @@ def serve(argv):
         async def watch(self, request):
             type = request.match_info["type"]
             name = request.match_info["name"]
-            event = asyncio.Event()
+            queue = asyncio.Queue()
 
-            self.watches[event] = (type, name)
-            try:
-                await asyncio.wait_for(event.wait(), timeout=60)
-            except TimeoutError:
-                updated = False
+            for version, date in self.conn.execute(
+                    "select version, date from pkg where type = ? and name = ?", (type, name,)):
+                self.watches[queue] = (type, name)
+                try:
+                    version, date = await asyncio.wait_for(queue.get(), timeout=60)
+                except TimeoutError:
+                    pass
+
+                del self.watches[queue]
+                return web.json_response({"type": type, "name": name, "version": version,
+                                          "date": date})
             else:
-                updated = True
-
-            del self.watches[event]
-            return web.json_response({"updated": updated})
+                return web.HTTPNotFound()
 
     asyncio.run(Server(args).run())
 

@@ -38,6 +38,7 @@ import base64
 import shutil
 import urllib.error
 import urllib.request
+import asyncio
 import hashlib
 import tarfile
 import tomllib
@@ -260,6 +261,23 @@ class Package:
         pythonpath.insert(0, self.venv_dir)
         env["PYTHONPATH"] = os.pathsep.join(pythonpath)
         os.execve(run, [run] + argv, env)
+
+
+async def check_for_update(name, lib=False):
+    url = f"http://{HOST}:{PORT}/watch/{'lib' if lib else 'run'}/{name}"
+    version = None
+    while True:
+        try:
+            response = await asyncio.to_thread(urllib.request.urlopen, url)
+            data = json.load(response)
+            if version is not None and version != data["version"]:
+                break
+            version = data["version"]
+
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                raise NoSuchPackage() from exc
+            await asyncio.sleep(5)
 
 
 class ImportHook:
