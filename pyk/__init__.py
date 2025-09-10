@@ -262,22 +262,19 @@ class Package:
         env["PYTHONPATH"] = os.pathsep.join(pythonpath)
         os.execve(run, [run] + argv, env)
 
+    async def wait_for_update(self):
+        version = await asyncio.to_thread(self.get_remote_version)
+        while True:
+            try:
+                response = await asyncio.to_thread(urllib.request.urlopen, self.url % "watch")
+                data = await asyncio.to_thread(json.load, response)
+                if version != data["version"]:
+                    return data
 
-async def check_for_update(name, lib=False):
-    url = f"http://{HOST}:{PORT}/watch/{'lib' if lib else 'run'}/{name}"
-    version = None
-    while True:
-        try:
-            response = await asyncio.to_thread(urllib.request.urlopen, url)
-            data = json.load(response)
-            if version is not None and version != data["version"]:
-                break
-            version = data["version"]
-
-        except urllib.error.HTTPError as exc:
-            if exc.code == 404:
-                raise NoSuchPackage() from exc
-            await asyncio.sleep(5)
+            except urllib.error.HTTPError as exc:
+                if exc.code == 404:
+                    raise NoSuchPackage() from exc
+                await asyncio.sleep(5)
 
 
 class ImportHook:
