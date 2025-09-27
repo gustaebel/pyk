@@ -32,6 +32,7 @@
 
 import io
 import os
+import re
 import sys
 import json
 import socket
@@ -59,9 +60,17 @@ def build(argv):
     if dirname:
         os.chdir(dirname)
 
-    # Read the pyk.toml file.
-    with open(basename, "rb") as fobj:
-        config = tomllib.load(fobj)
+    # Parse a build spec from a pyk.toml file or the inline pyk metadata (see PEP 723).
+    with open(basename) as fobj:
+        if os.path.splitext(basename)[-1] == ".toml":
+            content = fobj.read()
+        else:
+            if (match := re.findall(r"^# /// pyk$\s((?:^#(?:| .*)$\s)+)^# ///$", fobj.read(), re.M)):
+                content = "".join(line[1:].lstrip() for line in match[0].splitlines(keepends=True))
+            else:
+                raise SystemExit("ERROR: No inline pyk metadata found")
+
+    config = tomllib.loads(content)
 
     # FIXME do a lot more sanity checks.
     name = config["name"]
