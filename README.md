@@ -36,6 +36,7 @@ is run.
 - Simplifies simultaneous development on multiple different machines.
 - Independent from distribution package management.
 - Straight-forward building of packages, no `setup.py` or `pyproject.toml`.
+- Support for inline script metadata (PEP 723).
 - Restricted and secure access to the package repository using basic symmetric
   [Fernet](https://cryptography.io/en/latest/fernet/) encryption.
 - Only one single third-party dependency needed on the client side:
@@ -117,6 +118,28 @@ if __name__ == "__main__":
    >>> bar(8)
    64
    ```
+
+### Inline pyk metadata
+
+Instead of a separate `pyk.toml` file, the build specification can be embedded
+in the script file using PEP 723-style inline script metadata.
+
+```py
+#!/usr/bin/env python3
+#
+# /// pyk
+# name = "foo"
+# run = "foo.py"
+# ///
+
+import sys
+
+def bar(x):
+    print(x ** 2)
+
+if __name__ == "__main__":
+    bar(int(sys.argv[1]))
+```
 
 ## pyk.toml
 
