@@ -50,17 +50,18 @@ from . import Package, Crypto, NoSuchPackage, TOML_NAME, JSON_NAME, HOST, PORT
 
 def build(argv):
     parser = argparse.ArgumentParser(prog="pyk --build")
-    parser.description = "Build a package from the definition in a TOML file."
+    parser.description = "Build a package from the definition in a TOML file or "\
+            "a script with PEP 723-style inline metadata."
     parser.add_argument("path", nargs="?", default=TOML_NAME,
-                        help=f"the PATH of the build file, default is `{TOML_NAME}`")
+                        help=f"the PATH of the build or script file, default is `{TOML_NAME}`")
     args = parser.parse_args(argv)
 
-    # Change to the base directory of the toml file.
+    # Change to the base directory of the file.
     dirname, basename = os.path.split(args.path)
     if dirname:
         os.chdir(dirname)
 
-    # Parse a build spec from a pyk.toml file or the inline pyk metadata (see PEP 723).
+    # Parse the build spec from a toml file or a script with inline pyk metadata (see PEP 723).
     with open(basename) as fobj:
         if os.path.splitext(basename)[-1] == ".toml":
             content = fobj.read()
