@@ -257,6 +257,7 @@ class Package:
         run = os.path.join(self.venv_dir, run)
 
         env = os.environ.copy()
+        env["PYK_VERSION"] = self.config["version"]
         pythonpath = env.get("PYTHONPATH", "").split(os.pathsep)
         pythonpath.insert(0, self.venv_dir)
         env["PYTHONPATH"] = os.pathsep.join(pythonpath)
