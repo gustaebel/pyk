@@ -33,6 +33,7 @@
 import io
 import os
 import sys
+import http.client
 import json
 import base64
 import shutil
@@ -275,6 +276,9 @@ class Package:
             except urllib.error.HTTPError as exc:
                 if exc.code == 404:
                     raise NoSuchPackage() from exc
+                await asyncio.sleep(5)
+
+            except http.client.RemoteDisconnected:
                 await asyncio.sleep(5)
 
 
