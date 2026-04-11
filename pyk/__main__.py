@@ -173,6 +173,27 @@ def install(argv):
     os.chmod(path, 0o755)
 
 
+def remove(argv):
+    parser = argparse.ArgumentParser(prog="pyk --remove")
+    parser.description = "Remove a runner or a library from the pyk repository."
+    parser.add_argument("-r", "--run", "--runner", action="store_const", const="run", dest="type",
+                        default="run", help="package to remove is a runner")
+    parser.add_argument("-l", "--lib", "--library", action="store_const", const="lib", dest="type",
+                        help="package to remove is a library")
+    parser.add_argument("name")
+    args = parser.parse_args(argv)
+
+    crypto = Crypto()
+    data = crypto.encrypt(f'{{"type": "{args.type}", "name": "{args.name}"}}'.encode("utf-8"))
+    data = json.dumps({"data": data.decode("ascii")}).encode("ascii")
+
+    request = urllib.request.Request(
+            f"http://{HOST}:{PORT}/remove", data=data,
+            headers={"Content-Type": "application/json", "Content-Length": len(data)})
+    with urllib.request.urlopen(request) as uobj:
+        print(json.load(uobj))
+
+
 def execute(argv):
     parser = argparse.ArgumentParser()
     parser.description = "Execute a runner package with arguments."
@@ -242,6 +263,7 @@ def serve(argv):
                 web.post("/upload/{type}/{name}", self.upload),
                 web.get("/info/{type}/{name}", self.info),
                 web.get("/download/{type}/{name}", self.download),
+                web.post("/remove", self.remove),
                 web.get("/watch/{type}/{name}", self.watch),
             ])
 
@@ -322,6 +344,21 @@ def serve(argv):
             else:
                 return web.HTTPNotFound()
 
+        async def remove(self, request):
+            data = json.loads(await request.read())
+            data = json.loads(self.crypto.decrypt(data["data"]))
+
+            type = data["type"]
+            name = data["name"]
+
+            self.conn.execute("delete from access where type = ? and name = ?", (type, name))
+            curs = self.conn.execute("delete from pkg where type = ? and name = ?", (type, name))
+            if curs.rowcount > 0:
+                self.log(f"successfully removed {type!r} package {name!r}")
+                return web.json_response({"type": type, "name": name})
+            else:
+                return web.HTTPNotFound()
+
         async def watch(self, request):
             type = request.match_info["type"]
             name = request.match_info["name"]
@@ -381,6 +418,8 @@ match command:
         build(sys.argv[2:])
     case "--install":
         install(sys.argv[2:])
+    case "--remove":
+        remove(sys.argv[2:])
     case "--serve":
         serve(sys.argv[2:])
     case "--list":
