@@ -304,6 +304,8 @@ class ImportHook:
         if os.path.isdir(path):
             path = os.path.join(path, "__init__.py")
 
+        sys.path.insert(0, package.venv_dir)
+
         loader = importlib.machinery.SourceFileLoader(fullname, path)
         return importlib.util.spec_from_loader(fullname, loader=loader)
 
