@@ -133,8 +133,8 @@ class Package:
 
         self.url = f"http://{HOST}:{PORT}/%s/{'lib' if self.lib else 'run'}/{self.name}"
         self.base_dir = os.path.join(CACHE_DIR, "lib" if self.lib else "run", self.name)
-        self.package_dir = os.path.join(self.base_dir, "venv")
-        self.dependencies_dir = os.path.join(self.base_dir, "deps")
+        self.package_dir = os.path.join(self.base_dir, "package")
+        self.dependencies_dir = os.path.join(self.base_dir, "dependencies")
         self.json_path = os.path.join(self.base_dir, JSON_NAME)
 
         self.crypto = Crypto()
