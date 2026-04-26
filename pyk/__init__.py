@@ -196,6 +196,7 @@ class Package:
                     oldconfig = json.load(fobj)
             except FileNotFoundError:
                 uptodate = False
+                oldconfig = {}
             else:
                 local_version = oldconfig["version"]
                 self.log(f"local version: {local_version} / remote version: {remote_version}")
