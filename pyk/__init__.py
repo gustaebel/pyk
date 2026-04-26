@@ -132,8 +132,10 @@ class Package:
         self.logfile = Logfile(debug)
 
         self.url = f"http://{HOST}:{PORT}/%s/{'lib' if self.lib else 'run'}/{self.name}"
-        self.venv_dir = os.path.join(CACHE_DIR, "lib" if self.lib else "run", self.name)
-        self.json_path = os.path.join(self.venv_dir, JSON_NAME)
+        self.base_dir = os.path.join(CACHE_DIR, "lib" if self.lib else "run", self.name)
+        self.package_dir = os.path.join(self.base_dir, "venv")
+        self.dependencies_dir = os.path.join(self.base_dir, "deps")
+        self.json_path = os.path.join(self.base_dir, JSON_NAME)
 
         self.crypto = Crypto()
 
@@ -189,13 +191,13 @@ class Package:
                 print(f"ERROR: unable to reach {HOST}:{PORT}", file=sys.stderr)
                 sys.exit(123)
         else:
-            uptodate = True
             try:
                 with open(self.json_path, encoding="utf-8") as fobj:
-                    local_version = json.load(fobj)["version"]
+                    oldconfig = json.load(fobj)
             except FileNotFoundError:
                 uptodate = False
             else:
+                local_version = oldconfig["version"]
                 self.log(f"local version: {local_version} / remote version: {remote_version}")
                 uptodate = local_version == remote_version
 
@@ -204,25 +206,45 @@ class Package:
             self.load_config()
             return False
 
-        try:
-            shutil.rmtree(self.venv_dir)
-        except FileNotFoundError:
-            pass
-
-        os.makedirs(self.venv_dir)
-
-        self.logfile.connect_file(os.path.join(self.venv_dir, "pyk.log"))
+        self.logfile.connect_file(os.path.join(self.base_dir, "pyk.log"))
 
         self.log(f"download package {self.name!r}")
         data = self.server_command("download")
         data = self.crypto.decrypt(data["data"])
 
-        self.log(f"extract package {self.name!r} to {self.venv_dir!r}")
+        self.log("prepare virtual environment")
+        newconfig = self.extract_config(data)
+        olddeps = set(oldconfig.get("dependencies", []))
+        newdeps = set(newconfig.get("dependencies", []))
+
+        if newdeps != olddeps:
+            try:
+                shutil.rmtree(self.base_dir)
+            except FileNotFoundError:
+                pass
+        else:
+            try:
+                shutil.rmtree(self.package_dir)
+            except FileNotFoundError:
+                pass
+
+        os.makedirs(self.package_dir, exist_ok=True)
+        os.makedirs(self.dependencies_dir, exist_ok=True)
+
+        self.log(f"extract package {self.name!r} to {self.package_dir!r}")
         with self.open_archive(data) as tar:
-            tar.extractall(self.venv_dir)
+            tar.extractall(self.base_dir, filter=lambda t, p: t if t.name == JSON_NAME else None)
+
+        with self.open_archive(data) as tar:
+            tar.extractall(self.package_dir, filter=lambda t, p: t if t.name != JSON_NAME else None)
 
         self.load_config()
-        self.prepare_dependencies()
+
+        if newdeps != olddeps:
+            self.prepare_dependencies()
+        else:
+            self.log("dependencies are unchanged")
+
         self.save_config()
         return True
 
@@ -241,7 +263,7 @@ class Package:
 
     def prepare_dependencies(self):
         for dependency in self.config.get("dependencies", []):
-            args = ["pip", "install", "--no-warn-conflicts", "--target", self.venv_dir, dependency]
+            args = ["pip", "install", "--no-warn-conflicts", "--target", self.dependencies_dir, dependency]
             self.log(" ".join(args))
             try:
                 subprocess.check_call(args, stdout=self.logfile.fobj, stderr=subprocess.STDOUT)
@@ -255,12 +277,12 @@ class Package:
         if run is None:
             raise ValueError(f"missing 'run' variable in {JSON_NAME}")
 
-        run = os.path.join(self.venv_dir, run)
+        run = os.path.join(self.package_dir, run)
 
         env = os.environ.copy()
         env["PYK_VERSION"] = str(self.config["version"])
         pythonpath = env.get("PYTHONPATH", "").split(os.pathsep)
-        pythonpath.insert(0, self.venv_dir)
+        pythonpath = [self.package_dir, self.dependencies_dir] + pythonpath
         env["PYTHONPATH"] = os.pathsep.join(pythonpath)
         os.execve(run, [run] + argv, env)
 
@@ -300,11 +322,12 @@ class ImportHook:
             # pylint:disable=raise-missing-from
             raise ModuleNotFoundError(f"No pyk module named {name!r}")
 
-        path = os.path.join(package.venv_dir, package.config["lib"])
+        path = os.path.join(package.package_dir, package.config["lib"])
         if os.path.isdir(path):
             path = os.path.join(path, "__init__.py")
 
-        sys.path.insert(0, package.venv_dir)
+        sys.path.insert(0, package.dependencies_dir)
+        sys.path.insert(0, package.package_dir)
 
         loader = importlib.machinery.SourceFileLoader(fullname, path)
         return importlib.util.spec_from_loader(fullname, loader=loader)
@@ -318,5 +341,6 @@ def pyk(name, module_name=None):
         module_name = name
     package = Package(name, lib=True)
     package.sync()
-    sys.path.insert(0, package.venv_dir)
+    sys.path.insert(0, package.dependencies_dir)
+    sys.path.insert(0, package.package_dir)
     return importlib.import_module(module_name)
