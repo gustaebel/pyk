@@ -206,8 +206,6 @@ class Package:
             self.load_config()
             return False
 
-        self.logfile.connect_file(os.path.join(self.base_dir, "pyk.log"))
-
         self.log(f"download package {self.name!r}")
         data = self.server_command("download")
         data = self.crypto.decrypt(data["data"])
@@ -230,6 +228,8 @@ class Package:
 
         os.makedirs(self.package_dir, exist_ok=True)
         os.makedirs(self.dependencies_dir, exist_ok=True)
+
+        self.logfile.connect_file(os.path.join(self.base_dir, "pyk.log"))
 
         self.log(f"extract package {self.name!r} to {self.package_dir!r}")
         with self.open_archive(data) as tar:
