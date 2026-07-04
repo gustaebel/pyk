@@ -257,14 +257,20 @@ class Package:
             return
 
         try:
-            from pyximport import pyxbuild, get_distutils_extension
+            from pyximport import pyxbuild
         except ImportError as exc:
             raise ValueError("unable to compile pyx modules, please install cython") from exc
+        else:
+            try:
+                from pyximport._pyximport3 import get_distutils_extension
+            except ImportError as exc:
+                from pyximport import get_distutils_extension
 
         for pyx_file in pyx_files:
             self.log(f"compiling pyx module {pyx_file!r}")
             name = os.path.splitext(os.path.basename(pyx_file))[0]
-            extension_mod, _ = get_distutils_extension(f"{self.name}.{name}", pyx_file)
+            extension_mod, _ = get_distutils_extension(f"{self.name}.{name}", pyx_file,
+                                                       language_level=3)
             pyxbuild.pyx_to_dll(pyx_file, extension_mod, inplace=True)
 
     def load_config(self):
