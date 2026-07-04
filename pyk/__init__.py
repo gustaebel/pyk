@@ -33,6 +33,7 @@
 import io
 import os
 import sys
+import glob
 import http.client
 import json
 import base64
@@ -246,8 +247,25 @@ class Package:
         else:
             self.log("dependencies are unchanged")
 
+        self.compile_pyx()
+
         self.save_config()
         return True
+
+    def compile_pyx(self):
+        if not (pyx_files := glob.glob(os.path.join(self.package_dir, "**/*.pyx"))):
+            return
+
+        try:
+            from pyximport import pyxbuild, get_distutils_extension
+        except ImportError as exc:
+            raise ValueError("unable to compile pyx modules, please install cython") from exc
+
+        for pyx_file in pyx_files:
+            self.log(f"compiling pyx module {pyx_file!r}")
+            name = os.path.splitext(os.path.basename(pyx_file))[0]
+            extension_mod, _ = get_distutils_extension(f"{self.name}.{name}", pyx_file)
+            pyxbuild.pyx_to_dll(pyx_file, extension_mod, inplace=True)
 
     def load_config(self):
         with open(self.json_path, encoding="utf-8") as fobj:
