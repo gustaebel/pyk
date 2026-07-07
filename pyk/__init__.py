@@ -36,6 +36,7 @@ import sys
 import glob
 import http.client
 import json
+import time
 import base64
 import shutil
 import urllib.error
@@ -76,10 +77,14 @@ else:
 class NoSuchPackage(Exception):
     pass
 
+class UnableToObtainLock(Exception):
+    pass
+
 
 PACKAGE_NAME = "pyk"
 TOML_NAME = "pyk.toml"
 JSON_NAME = "pyk.json"
+LOCK_NAME = "pyk.lock"
 CACHE_DIR = os.path.expanduser("~/.cache/pyk")
 NODE = platform.node()
 
@@ -136,6 +141,7 @@ class Package:
         self.base_dir = os.path.join(CACHE_DIR, "lib" if self.lib else "run", self.name)
         self.package_dir = os.path.join(self.base_dir, "package")
         self.dependencies_dir = os.path.join(self.base_dir, "dependencies")
+        self.lock_path = os.path.join(self.base_dir, LOCK_NAME)
         self.json_path = os.path.join(self.base_dir, JSON_NAME)
 
         self.crypto = Crypto()
@@ -173,11 +179,39 @@ class Package:
             else:
                 raise ValueError("not a valid package file")
 
+    @contextmanager
+    def lock(self):
+        self.log(f"lock {self.lock_path}")
+        try:
+            # Try to get the lock for 60 seconds.
+            for _ in range(60):
+                try:
+                    open(self.lock_path, "x").close()
+                except FileExistsError:
+                    time.sleep(1)
+                else:
+                    break
+            else:
+                raise UnableToObtainLock()
+
+            yield
+
+        finally:
+            self.log(f"unlock {self.lock_path}")
+            try:
+                os.remove(self.lock_path)
+            except FileNotFoundError:
+                pass
+
     def sync(self):
         """Check if the remote package was updated. If yes, remove the outdated package from the
            cache and download the current version. If the server is unreachable, use the cached
            package if there is one but warn.
         """
+        with self.lock():
+            self._sync()
+
+    def _sync(self):
         # FIXME detect python version changes.
         self.log(f"check if package {self.name!r} has changed")
         try:

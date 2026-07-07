@@ -45,7 +45,7 @@ import argparse
 
 from datetime import datetime
 
-from . import Package, Crypto, NoSuchPackage, TOML_NAME, JSON_NAME, HOST, PORT
+from . import Package, Crypto, NoSuchPackage, UnableToObtainLock, TOML_NAME, JSON_NAME, HOST, PORT
 
 
 def build(argv):
@@ -210,6 +210,10 @@ def execute(argv):
         package.sync()
     except NoSuchPackage:
         print(f"ERROR: package {args.name!r} not found", file=sys.stderr)
+        sys.exit(123)
+    except UnableToObtainLock:
+        print(f"ERROR: unable to obtain installation lock for package {args.name!r}",
+              file=sys.stderr)
         sys.exit(123)
 
     package.run(args.args)
