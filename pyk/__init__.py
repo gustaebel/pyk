@@ -77,9 +77,6 @@ else:
 class NoSuchPackage(Exception):
     pass
 
-class UnableToObtainLock(Exception):
-    pass
-
 
 PACKAGE_NAME = "pyk"
 TOML_NAME = "pyk.toml"
@@ -179,39 +176,11 @@ class Package:
             else:
                 raise ValueError("not a valid package file")
 
-    @contextmanager
-    def lock(self):
-        self.log(f"lock {self.lock_path}")
-        try:
-            # Try to get the lock for 60 seconds.
-            for _ in range(60):
-                try:
-                    open(self.lock_path, "x").close()
-                except FileExistsError:
-                    time.sleep(1)
-                else:
-                    break
-            else:
-                raise UnableToObtainLock()
-
-            yield
-
-        finally:
-            self.log(f"unlock {self.lock_path}")
-            try:
-                os.remove(self.lock_path)
-            except FileNotFoundError:
-                pass
-
     def sync(self):
         """Check if the remote package was updated. If yes, remove the outdated package from the
            cache and download the current version. If the server is unreachable, use the cached
            package if there is one but warn.
         """
-        with self.lock():
-            self._sync()
-
-    def _sync(self):
         # FIXME detect python version changes.
         self.log(f"check if package {self.name!r} has changed")
         try:
@@ -225,66 +194,80 @@ class Package:
             else:
                 print(f"ERROR: unable to reach {HOST}:{PORT}", file=sys.stderr)
                 sys.exit(123)
+
+        try:
+            with open(self.json_path, encoding="utf-8") as fobj:
+                oldconfig = json.load(fobj)
+        except FileNotFoundError:
+            uptodate = False
+            oldconfig = {}
         else:
-            try:
-                with open(self.json_path, encoding="utf-8") as fobj:
-                    oldconfig = json.load(fobj)
-            except FileNotFoundError:
-                uptodate = False
-                oldconfig = {}
-            else:
-                local_version = oldconfig["version"]
-                self.log(f"local version: {local_version} / remote version: {remote_version}")
-                uptodate = local_version == remote_version
+            local_version = oldconfig["version"]
+            self.log(f"local version: {local_version} / remote version: {remote_version}")
+            uptodate = local_version == remote_version
 
         if uptodate:
             self.log("package is up-to-date")
             self.load_config()
             return False
 
-        self.log(f"download package {self.name!r}")
-        data = self.server_command("download")
-        data = self.crypto.decrypt(data["data"])
+        try:
+            open(self.lock_path, "x").close()
+        except FileExistsError:
+            while os.path.exists(self.lock_path):
+                time.sleep(1)
+            return
 
-        self.log("prepare virtual environment")
-        newconfig = self.extract_config(data)
-        olddeps = set(oldconfig.get("dependencies", []))
-        newdeps = set(newconfig.get("dependencies", []))
+        try:
+            self.log(f"download package {self.name!r}")
+            data = self.server_command("download")
+            data = self.crypto.decrypt(data["data"])
 
-        if newdeps != olddeps:
+            self.log("prepare virtual environment")
+            newconfig = self.extract_config(data)
+            olddeps = set(oldconfig.get("dependencies", []))
+            newdeps = set(newconfig.get("dependencies", []))
+
+            if newdeps != olddeps:
+                try:
+                    shutil.rmtree(self.base_dir)
+                except FileNotFoundError:
+                    pass
+            else:
+                try:
+                    shutil.rmtree(self.package_dir)
+                except FileNotFoundError:
+                    pass
+
+            os.makedirs(self.package_dir, exist_ok=True)
+            os.makedirs(self.dependencies_dir, exist_ok=True)
+
+            self.logfile.connect_file(os.path.join(self.base_dir, "pyk.log"))
+
+            self.log(f"extract package {self.name!r} to {self.package_dir!r}")
+            with self.open_archive(data) as tar:
+                tar.extractall(self.base_dir, filter=lambda t, p: t if t.name == JSON_NAME else None)
+
+            with self.open_archive(data) as tar:
+                tar.extractall(self.package_dir, filter=lambda t, p: t if t.name != JSON_NAME else None)
+
+            self.load_config()
+
+            if newdeps != olddeps:
+                self.prepare_dependencies()
+            else:
+                self.log("dependencies are unchanged")
+
+            self.compile_pyx()
+
+            self.save_config()
+            return True
+
+        finally:
             try:
-                shutil.rmtree(self.base_dir)
+                os.remove(self.lock_path)
             except FileNotFoundError:
                 pass
-        else:
-            try:
-                shutil.rmtree(self.package_dir)
-            except FileNotFoundError:
-                pass
-
-        os.makedirs(self.package_dir, exist_ok=True)
-        os.makedirs(self.dependencies_dir, exist_ok=True)
-
-        self.logfile.connect_file(os.path.join(self.base_dir, "pyk.log"))
-
-        self.log(f"extract package {self.name!r} to {self.package_dir!r}")
-        with self.open_archive(data) as tar:
-            tar.extractall(self.base_dir, filter=lambda t, p: t if t.name == JSON_NAME else None)
-
-        with self.open_archive(data) as tar:
-            tar.extractall(self.package_dir, filter=lambda t, p: t if t.name != JSON_NAME else None)
-
-        self.load_config()
-
-        if newdeps != olddeps:
-            self.prepare_dependencies()
-        else:
-            self.log("dependencies are unchanged")
-
-        self.compile_pyx()
-
-        self.save_config()
-        return True
 
     def compile_pyx(self):
         if not (pyx_files := glob.glob(os.path.join(self.package_dir, "**/*.pyx"))):
