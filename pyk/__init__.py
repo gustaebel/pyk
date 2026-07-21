@@ -217,6 +217,8 @@ class Package:
             while os.path.exists(self.lock_path):
                 time.sleep(1)
             return
+        except FileNotFoundError:
+            pass
 
         try:
             self.log(f"download package {self.name!r}")
